@@ -10,7 +10,7 @@ import queue
 
 class bv_mid_getter(threading.Thread):
     def __init__(self):
-        super().__init__()
+        super().__init__(daemon=True)
         self.cache = {}
         self.tasks = queue.Queue()
         self.semaphore = threading.Semaphore(0)
@@ -21,9 +21,10 @@ class bv_mid_getter(threading.Thread):
 
         self.last_get_time = 0  # 上次请求时间, 用于限速
         self.min_get_interval = 2  # 两次请求的最小时间间隔(s)
-        self.cache_del_time = 60 * 60 * 24 * 14  # cache过期时间(s)
+        self.cache_del_time = 60 * 60 * 24 * 7  # cache过期时间(s)
         self.cache_clear_size = 10000  # cache大于该值时触发清理
         self.__load_cache()
+        self.request_count = 0  # 请求发送次数统计
 
     def __save_cache(self):
         """
@@ -71,10 +72,11 @@ class bv_mid_getter(threading.Thread):
         if bv in self.cache:
             return self.cache[bv]["mid"]
         # 开始查询BV号所属用户ID
-        print(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 查询{bv}")
+        # print(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 查询{bv}")
         result = requests.get(url=f"https://www.bilibili.com/video/{bv}/", headers={
             'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
         })
+        self.request_count += 1
         self.last_get_time = time.time()
         text = result.content.decode(encoding="utf-8")
         search_result = re.findall(r'"mid":([0-9]*),', text)

@@ -497,6 +497,9 @@
         }
         blocker = new popular_page_video_blocker();
         blocker.run();
+        setTimeout(()=>{
+            blocker.find_and_block();
+        }, 1000);
     }
 
     /**

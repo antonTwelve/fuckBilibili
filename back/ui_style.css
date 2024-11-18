@@ -1,0 +1,21 @@
+Screen {
+    background: black;
+}
+
+Horizontal {
+    width: 1fr;
+    height: 1;
+}
+
+#debugInfoWrapper {
+    margin-top: 1;
+    padding: 0 1;
+    border: solid $accent #db5c5c;
+    height: 8;
+    width: 40;
+}
+
+#timestr {
+    height: 1;
+    color: #70b26f;
+}

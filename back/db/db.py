@@ -26,13 +26,11 @@ class block_user_database:
 
     def insert_data(self, mid, username=None):
         cursor = self.database.cursor()
-        if username is None:
-            insert_sql = f"INSERT INTO users (mid) VALUES({mid})"
-        else:
-            username.replace("'", "")
-            insert_sql = f"INSERT INTO users VALUES({mid}, '{username}')"
         try:
-            cursor.execute(insert_sql)
+            if username is None:
+                cursor.execute("INSERT INTO users (mid) VALUES(?)", (mid,))
+            else:
+                cursor.execute("INSERT INTO users VALUES(?, ?)", (mid, username))
         except Exception as e:
             cursor.close()
             self.db_logging.error(e)
@@ -45,7 +43,7 @@ class block_user_database:
         cursor = self.database.cursor()
         is_exist = False
         try:
-            cursor.execute(f"SELECT 1 FROM users WHERE mid={mid}")
+            cursor.execute("SELECT 1 FROM users WHERE mid=?", (mid,))
             if not (cursor.fetchone() is None):
                 is_exist = True
         except Exception as e:
@@ -58,7 +56,7 @@ class block_user_database:
     def delete(self, mid):
         cursor = self.database.cursor()
         try:
-            cursor.execute(f"DELETE FROM users WHERE mid={mid}")
+            cursor.execute(f"DELETE FROM users WHERE mid=?", (mid,))
         except Exception as e:
             cursor.close()
             self.db_logging.error(e)
@@ -73,7 +71,7 @@ class block_user_database:
 
 class database_thread(threading.Thread):
     def __init__(self):
-        super().__init__()
+        super().__init__(daemon=True)
         self.lock = threading.Lock()
         self.query_se = threading.Semaphore(0)
         self.ret_se = threading.Semaphore(0)
