@@ -43,6 +43,9 @@ class Server_UI(App):
             with Horizontal():
                 yield Label("BV查询累计次数: ")
                 yield Label(id="BVQueryCount")
+            with Horizontal():
+                yield Label("BV查询数量: ")
+                yield Label(id="BVQueryBVCount")
 
     def on_mount(self):
         self.set_interval(0.5, self.update)
@@ -65,6 +68,7 @@ class Server_UI(App):
             self.query_one("#dblockStatus", Label).update("未锁定")
         self.query_one("#midQueryCount", Label).update(str(self.request_count["mid_query"]))
         self.query_one("#BVQueryCount", Label).update(str(self.request_count["bv_query"]))
+        self.query_one("#BVQueryBVCount", Label).update(str(self.request_count["bv_query_count"]))
 
 
 def is_locked(lock):

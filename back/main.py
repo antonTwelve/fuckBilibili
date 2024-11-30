@@ -1,7 +1,6 @@
 import logging
 import threading
 import time
-
 import requests
 
 from db import database_thread
@@ -18,7 +17,8 @@ bv2mid = bv_mid_getter()
 bv2mid.start()
 request_count = {
     "mid_query": 0,
-    "bv_query": 0
+    "bv_query": 0,
+    "bv_query_count": 0
 }
 
 app = Flask(__name__)
@@ -59,6 +59,15 @@ def is_user_exist():
     return is_mid_exist(mid)
 
 
+@app.route("/isExistS", methods=["POST"])
+def is_user_exist_S():
+    mids = request.form.get("mids").split(",")
+    result = []
+    for mid in mids:
+        result.append(is_mid_exist(mid))
+    return jsonify(result)
+
+
 @app.route("/remove", methods=["POST"])
 def remove_user():
     mid = request.form.get("mid")
@@ -69,21 +78,25 @@ def remove_user():
     return "OK"
 
 
-@app.route("/blockBV", methods=["GET"])
-def is_block_bv():
+# 查询一个BV列表中的每个视频是否被屏蔽
+@app.route("/isBlockedBVS", methods=["POST"])
+def is_blocked_bv():
+    bvs = request.form.get("bvs").split(",")
     request_count["bv_query"] += 1
-    bv = request.args.get("bv")
-    if bv is None:
-        return "ERR bv"
-    mid = bv2mid.get_mid_by_bv(bv)
-    if mid is None:
-        return jsonify({
-            "msg": "just wait..."
-        })
+    request_count["bv_query_count"] += len(bvs)
+    mids = []
+    results = []
+    for bv in bvs:
+        mids.append(bv2mid.get_mid_by_bv(bv))
+    for mid in mids:
+        if mid is None:
+            results.append("None")  # 暂时没有获取到ID
+        else:
+            results.append(is_mid_exist(mid))
     ret_data = {
         "msg": "OK",
-        "mid": mid,
-        "result": is_mid_exist(mid)
+        "mid": mids,
+        "result": results
     }
     return jsonify(ret_data)
 

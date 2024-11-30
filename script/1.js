@@ -294,7 +294,7 @@
                 }
                 else {
                     if (blocker !== null) {
-                        setTimeout(()=>{
+                        setTimeout(() => {
                             blocker.find_and_block();
                         }, 100);
                     }
@@ -320,23 +320,38 @@
             ele.style.display = "none";
         }
 
-        is_user_blocked(card, user_mid, self) {
-            let cache_ret = this.query_cache.get(user_mid);
-            if (cache_ret === true) {
-                this.block_video_card(card);
-                return;
+        is_user_blocked(card_list, user_mid_list, self) {
+            let query_card_list = [];
+            let query_mid_list = [];
+            //先查缓存
+            for (let i = 0; i < card_list.length; i++) {
+                let cache_ret = this.query_cache.get(user_mid_list[i]);
+                if (cache_ret === true) {
+                    this.block_video_card(card_list[i]);
+                }
+                else if (cache_ret !== false) {
+                    //不是true也不是false, 没有查询到结果
+                    query_card_list.push(card_list[i]);
+                    query_mid_list.push(user_mid_list[i]);
+                }
             }
-            else if (cache_ret === false) return;
+            let data = new FormData();
+            //整个数组以字符串形式插入FormData, 以数组形式逐个插入会在数量60左右发生崩溃
+            data.append("mids", query_mid_list);
             GM_xmlhttpRequest({
-                method: "GET",
-                url: server_host + "/isExist?mid=" + user_mid,
+                method: "POST",
+                url: server_host + "/isExistS",
+                data: data,
                 onload: function (response) {
-                    if (response.responseText === "True") {
-                        self.block_video_card(card);
-                        self.query_cache.set(user_mid, true);
-                    }
-                    else if (response.responseText === "False") {
-                        self.query_cache.set(user_mid, false);
+                    let results = JSON.parse(response.response);
+                    for (let i = 0; i < results.length; i++) {
+                        if (results[i] === "True") {
+                            self.block_video_card(query_card_list[i]);
+                            self.query_cache.set(query_mid_list[i], true);
+                        }
+                        else if (results[i] === "False") {
+                            self.query_cache.set(query_mid_list[i], false);
+                        }
                     }
                 },
                 onerror: function (response) {
@@ -383,6 +398,8 @@
         find_and_block() {
             if (!this.is_server_online) return;
             let bili_video_cards = document.querySelectorAll(this.video_card_selector);
+            let query_card_list = [];
+            let query_mid_list = [];
             for (let i = 0; i < bili_video_cards.length; i++) {
                 let mid = this.get_mid_from_video_card(bili_video_cards[i]);
                 if (!mid) continue;
@@ -390,21 +407,27 @@
                 bili_video_cards[i].setAttribute("block_script_id", mid);
                 bili_video_cards[i].setAttribute("block_script_name", name);
                 bili_video_cards[i].addEventListener("contextmenu", this.right_click_handler);
-                this.is_user_blocked(bili_video_cards[i], mid, this);
+                query_card_list.push(bili_video_cards[i]);
+                query_mid_list.push(mid);
             }
-
-            setTimeout(() => {
-                this.find_and_block();
-            }, this.block_loop_time);
+            this.is_user_blocked(query_card_list, query_mid_list, this);
         }
 
-        run() {
-            this.find_and_block();
+        delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async run() {
             if (this.cache_update)
                 setInterval(() => {
                     //n ms清空一次缓存
                     this.query_cache.clear();
                 }, this.cache_update_time);
+
+            while (true) {
+                this.find_and_block();
+                await this.delay(this.block_loop_time);
+            }
         }
     }
 
@@ -429,28 +452,39 @@
             }
 
             // is_video_bv_blocked
-            is_user_blocked(card, video_bv, self) {
-                let cache_ret = this.query_cache.get(video_bv);
-                if (cache_ret === true) {
-                    this.block_video_card(card);
-                    return;
+            is_user_blocked(card_list, video_bv_list, self) {
+                let query_card_list = [];
+                let query_video_bv_list = [];
+                for (let i = 0; i < video_bv_list.length; i++) {
+                    let cache_ret = this.query_cache.get(video_bv_list[i]);
+                    if (cache_ret === true) {
+                        this.block_video_card(card_list[i]);
+                    }
+                    else if (cache_ret !== false) {
+                        query_card_list.push(card_list[i]);
+                        query_video_bv_list.push(video_bv_list[i]);
+                    }
                 }
-                else if (cache_ret === false) return;
+                let data = new FormData();
+                data.append("bvs", query_video_bv_list);
                 GM_xmlhttpRequest({
-                    method: "GET",
-                    url: server_host + "/blockBV?bv=" + video_bv,
+                    method: "POST",
+                    url: server_host + "/isBlockedBVS",
+                    data: data,
                     onload: function (response) {
-                        let ret_data = JSON.parse(response.responseText);
+                        let ret_data = JSON.parse(response.response);
                         if (ret_data["msg"] !== "OK") {
                             return;
                         }
-                        bv2mid_cache.set(video_bv, ret_data["mid"]);
-                        if (ret_data["result"] === "True") {
-                            self.block_video_card(card);
-                            self.query_cache.set(video_bv, true);
-                        }
-                        else if (ret_data["result"] === "False") {
-                            self.query_cache.set(video_bv, false);
+                        for (let i = 0; i < ret_data["result"].length; i++) {
+                            bv2mid_cache.set(query_video_bv_list[i], ret_data["mid"][i]);
+                            if (ret_data["result"][i] === "True") {
+                                self.block_video_card(query_card_list[i]);
+                                self.query_cache.set(query_video_bv_list[i], true);
+                            }
+                            else if (ret_data["result"][i] === "False") {
+                                self.query_cache.set(query_video_bv_list[i], false);
+                            }
                         }
                     },
                     onerror: function (response) {
@@ -496,10 +530,9 @@
             }
         }
         blocker = new popular_page_video_blocker();
-        blocker.run();
         setTimeout(()=>{
-            blocker.find_and_block();
-        }, 1000);
+            blocker.run();
+        }, 1000);   //等1s再开始查询
     }
 
     /**
