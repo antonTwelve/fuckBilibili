@@ -35,11 +35,17 @@ class Server_UI(App):
                 yield Label("bv->mid查询次数: ")
                 yield Label(id="bv2midRequestCount")
             with Horizontal():
+                yield Label("bv->mid查询失败次数: ")
+                yield Label(id="bv2midRequestFailCount")
+            with Horizontal():
                 yield Label("数据库互斥锁状态: ")
                 yield Label(id="dblockStatus")
             with Horizontal():
                 yield Label("用户查询累计次数: ")
                 yield Label(id="midQueryCount")
+            with Horizontal():
+                yield Label("用户数据库查询累计次数: ")
+                yield Label(id="midDBQueryCount")
             with Horizontal():
                 yield Label("BV查询累计次数: ")
                 yield Label(id="BVQueryCount")
@@ -55,9 +61,10 @@ class Server_UI(App):
     def update(self):
         self.query_one("#timestr", Label).update(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         self.query_one("#runTime", Label).update(seconds_to_hms(time.time() - self.start_time))
-        self.query_one("#bv2midQueueSize", Label).update(str(self.bv2mid_info.tasks.qsize()))
+        self.query_one("#bv2midQueueSize", Label).update(str(self.bv2mid_info.task_queue_size_disp))
         self.query_one("#bv2midCacheSize", Label).update(str(len(self.bv2mid_info.cache)))
         self.query_one("#bv2midRequestCount", Label).update(str(self.bv2mid_info.request_count))
+        self.query_one("#bv2midRequestFailCount", Label).update(str(self.bv2mid_info.bv2mid_query_fail_count))
         # 查询数据库互斥锁状态
         db_locked = is_locked(self.db_info.lock)
         if db_locked:
@@ -67,6 +74,7 @@ class Server_UI(App):
             self.query_one("#dblockStatus", Label).styles.color = "green"
             self.query_one("#dblockStatus", Label).update("未锁定")
         self.query_one("#midQueryCount", Label).update(str(self.request_count["mid_query"]))
+        self.query_one("#midDBQueryCount", Label).update(str(self.request_count["mid_db_query"]))
         self.query_one("#BVQueryCount", Label).update(str(self.request_count["bv_query"]))
         self.query_one("#BVQueryBVCount", Label).update(str(self.request_count["bv_query_count"]))
 

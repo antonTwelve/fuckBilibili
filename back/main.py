@@ -1,6 +1,8 @@
 import logging
 import threading
+import socket
 import time
+
 import requests
 
 from db import database_thread
@@ -17,6 +19,7 @@ bv2mid = bv_mid_getter()
 bv2mid.start()
 request_count = {
     "mid_query": 0,
+    "mid_db_query": 0,
     "bv_query": 0,
     "bv_query_count": 0
 }
@@ -44,7 +47,8 @@ def is_mid_exist(mid):
     :param mid: 数字字符串
     :return: 返回字符串"True", "False", 或者"None"
     """
-    request_count["mid_query"] += 1
+    request_count["mid_db_query"] += 1
+    mid = str(mid)
     if (mid is None) or (not mid.isdigit()):
         return "ERR1"
     ret = user_database.is_exist(mid)
@@ -55,12 +59,14 @@ def is_mid_exist(mid):
 
 @app.route("/isExist", methods=["GET"])
 def is_user_exist():
+    request_count["mid_query"] += 1
     mid = request.args.get("mid")
     return is_mid_exist(mid)
 
 
 @app.route("/isExistS", methods=["POST"])
 def is_user_exist_S():
+    request_count["mid_query"] += 1
     mids = request.form.get("mids").split(",")
     result = []
     for mid in mids:
@@ -106,11 +112,23 @@ def is_alive():
     return "OK"
 
 
+def is_port_in_use(port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(('127.0.0.1', port))
+            return False
+        except OSError:
+            return True
+
+
 def flask_thread():
-    app.run(port=PORT)
+    app.run(host="127.0.0.1", port=PORT)
     user_database.close()
 
 
+if is_port_in_use(PORT):
+    print(f"{PORT}端口已被占用")
+    exit(0)
 # 启动flask线程
 threading.Thread(target=flask_thread, daemon=True).start()
 # 等待flask启动完成, 直接启动TUI将导致flask无法正常启动

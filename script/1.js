@@ -447,8 +447,8 @@
             constructor() {
                 super();
                 this.video_card_selector = ".video-card";
-                // this.cache_update_time = 3000;
-                this.block_loop_time = 10000;
+                this.cache_update_time = 20000;   // 20s清空一次缓存
+                this.block_loop_time = 5000;     // 5s查询一次
             }
 
             // is_video_bv_blocked
@@ -577,6 +577,6 @@
     var url = window.location.href;
     if (url.startsWith("https://space.bilibili.com/")) user_space_block();
     else if (url.startsWith("https://www.bilibili.com/video/BV") || url.startsWith("https://www.bilibili.com/video/av")) video_page_block();
-    else if (url.startsWith("https://www.bilibili.com/v/popular/all/")) popular_page_block();
+    else if (url.startsWith("https://www.bilibili.com/v/popular/all")) popular_page_block();
     else if (url === "https://www.bilibili.com/" || url.startsWith("https://www.bilibili.com/?")) home_page_block();
 })();
