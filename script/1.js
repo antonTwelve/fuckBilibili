@@ -143,13 +143,14 @@
             let user_name = get_user_name();
             let user_mid = get_user_mid();
             if (!user_mid || !user_name) return;
-            let data = new FormData();
-            data.append("mid", user_mid);
-            data.append("username", user_name);
+            let data = "mid=" + encodeURIComponent(user_mid) + "&username=" + encodeURIComponent(user_name);
             GM_xmlhttpRequest({
                 method: "POST",
                 url: server_host + "/block",
                 data: data,
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
                 onload: function (response) {
                     if (response.responseText === "OK") {
                         user_blocked();
@@ -173,12 +174,14 @@
         function send_remove_req() {
             let user_mid = get_user_mid();
             if (!user_mid) return;
-            let data = new FormData();
-            data.append("mid", user_mid);
+            let data = "mid=" + encodeURIComponent(user_mid);
             GM_xmlhttpRequest({
                 method: "POST",
                 url: server_host + "/remove",
                 data: data,
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
                 onload: function (response) {
                     if (response.responseText == "OK") {
                         user_unblocked();
@@ -256,7 +259,8 @@
      * 弹出右键屏蔽菜单
      * @param {*} x 
      * @param {*} y 
-     * @param {*} callback 
+     * @param {*} mid 
+     * @param {*} name
      */
     function pop_right_click_block_btn(x, y, mid, name) {
         let menu_div = document.createElement('div');
@@ -278,13 +282,14 @@
      */
     function block_user(user_mid, user_name) {
         if (!user_mid || !user_name) return;
-        let data = new FormData();
-        data.append("mid", user_mid);
-        data.append("username", user_name);
+        let data = "mid=" + encodeURIComponent(user_mid) + "&username=" + encodeURIComponent(user_name);
         GM_xmlhttpRequest({
             method: "POST",
             url: server_host + "/block",
             data: data,
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
             onload: function (response) {
                 if (response.responseText === "ERR1") {
                     b_blocker_alert("错误的mid");
@@ -295,8 +300,9 @@
                 else {
                     if (blocker !== null) {
                         setTimeout(() => {
-                            blocker.find_and_block();
-                        }, 100);
+                            // 清空缓存, 重新查询并屏蔽
+                            blocker.find_and_block(true);
+                        }, 100);    //等待100ms进行屏蔽
                     }
                 }
             },
@@ -311,9 +317,10 @@
             this.is_server_online = true;
             this.query_cache = new Map();
             this.video_card_selector = ".bili-video-card";
-            this.cache_update = true;
             this.cache_update_time = 3000;
             this.block_loop_time = 500;
+            this.block_timer = null;
+            this.cache_clear_timer = null;
         }
 
         block_video_card(ele) {
@@ -335,13 +342,16 @@
                     query_mid_list.push(user_mid_list[i]);
                 }
             }
-            let data = new FormData();
-            //整个数组以字符串形式插入FormData, 以数组形式逐个插入会在数量60左右发生崩溃
-            data.append("mids", query_mid_list);
+            //如果没有需要查询的, 直接返回
+            if (query_mid_list.length === 0) return;
+            let data = "mids=" + encodeURIComponent(query_mid_list.toString());
             GM_xmlhttpRequest({
                 method: "POST",
                 url: server_host + "/isExistS",
                 data: data,
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
                 onload: function (response) {
                     let results = JSON.parse(response.response);
                     for (let i = 0; i < results.length; i++) {
@@ -395,8 +405,21 @@
             return match_result[1];
         }
 
-        find_and_block() {
+        find_and_block(clear_cache = false) {
+            //定时逻辑
+            if (this.block_timer !== null) {
+                //如果定时器存在, 先清除
+                clearTimeout(this.block_timer);
+            }
+            this.block_timer = setTimeout(() => {
+                this.find_and_block();
+            }, this.block_loop_time);
+
+            //屏蔽逻辑
             if (!this.is_server_online) return;
+            if (clear_cache) {
+                this.clear_cache();
+            }
             let bili_video_cards = document.querySelectorAll(this.video_card_selector);
             let query_card_list = [];
             let query_mid_list = [];
@@ -404,6 +427,7 @@
                 let mid = this.get_mid_from_video_card(bili_video_cards[i]);
                 if (!mid) continue;
                 let name = this.get_user_name_from_video_card(bili_video_cards[i]);
+                //找到用户mid和用户名, 放在属性中给右键菜单使用
                 bili_video_cards[i].setAttribute("block_script_id", mid);
                 bili_video_cards[i].setAttribute("block_script_name", name);
                 bili_video_cards[i].addEventListener("contextmenu", this.right_click_handler);
@@ -413,21 +437,24 @@
             this.is_user_blocked(query_card_list, query_mid_list, this);
         }
 
-        delay(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
+        // delay(ms) {
+        //     return new Promise(resolve => setTimeout(resolve, ms));
+        // }
+
+        clear_cache() {
+            // 定期清空缓存
+            if (this.cache_clear_timer !== null) {
+                clearTimeout(this.cache_clear_timer);
+            }
+            this.cache_clear_timer = setTimeout(() => {
+                this.clear_cache();
+            }, this.cache_update_time);
+            this.query_cache.clear();
         }
 
         async run() {
-            if (this.cache_update)
-                setInterval(() => {
-                    //n ms清空一次缓存
-                    this.query_cache.clear();
-                }, this.cache_update_time);
-
-            while (true) {
-                this.find_and_block();
-                await this.delay(this.block_loop_time);
-            }
+            this.clear_cache();     // 启动缓存清空循环
+            this.find_and_block();  // 启动查询屏蔽循环
         }
     }
 
@@ -447,8 +474,8 @@
             constructor() {
                 super();
                 this.video_card_selector = ".video-card";
-                this.cache_update_time = 20000;   // 20s清空一次缓存
-                this.block_loop_time = 5000;     // 5s查询一次
+                this.cache_update_time = 5000;   // 热门页清空缓存时间(ms)
+                this.block_loop_time = 3000;     // 热门页查询时间间隔(ms)
             }
 
             // is_video_bv_blocked
@@ -465,12 +492,15 @@
                         query_video_bv_list.push(video_bv_list[i]);
                     }
                 }
-                let data = new FormData();
-                data.append("bvs", query_video_bv_list);
+                if (query_video_bv_list.length === 0) return;
+                let data = "bvs=" + encodeURIComponent(query_video_bv_list.toString());
                 GM_xmlhttpRequest({
                     method: "POST",
                     url: server_host + "/isBlockedBVS",
                     data: data,
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
                     onload: function (response) {
                         let ret_data = JSON.parse(response.response);
                         if (ret_data["msg"] !== "OK") {
@@ -530,9 +560,15 @@
             }
         }
         blocker = new popular_page_video_blocker();
-        setTimeout(()=>{
-            blocker.run();
-        }, 1000);   //等1s再开始查询
+        let temp_interal = setInterval(() => {
+            //100ms询问判断一次是否有类名为".video-card"的元素, 有则启动
+            let video_cards = document.querySelectorAll(blocker.video_card_selector);
+            if (video_cards.length > 0) {
+                clearInterval(temp_interal);
+                //如果有视频卡片, 则开始查询
+                blocker.run();
+            }
+        }, 100);
     }
 
     /**

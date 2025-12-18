@@ -1,8 +1,0 @@
-/.idea
-/.venv
-/script
-/dist
-/.ipynb_checkpoints
-bvcache
-__pycache__
-*.log

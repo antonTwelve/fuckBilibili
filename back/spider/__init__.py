@@ -1,1 +1,0 @@
-from spider.bv2mid import bv_mid_getter
